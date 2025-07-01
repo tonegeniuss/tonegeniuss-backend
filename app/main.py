@@ -39,6 +39,7 @@ def extract_audio(query: str = Query(...),
         "format": "bestaudio/best",
         "outtmpl": temp_path,
         "quiet": True,
+        "cookiefile": "cookies.txt",  # ✅ ADDED THIS LINE
         "postprocessors": [{
             "key": "FFmpegExtractAudio",
             "preferredcodec": "mp3",
