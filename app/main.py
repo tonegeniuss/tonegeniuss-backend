@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from yt_dlp import YoutubeDL
 import os
@@ -6,6 +7,14 @@ import uuid
 import subprocess
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 OUTPUT_DIR = "downloads"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -15,10 +24,10 @@ def root():
     return {"status": "ToneGeniuss Backend Running"}
 
 @app.get("/extract-audio/")
-def extract_audio(query: str = Query(..., description="YouTube URL or song name"),
-                  start: float = Query(0, description="Start time in seconds"),
-                  end: float = Query(30, description="End time in seconds"),
-                  format: str = Query("mp3", description="mp3 or m4r")):
+def extract_audio(query: str = Query(...),
+                  start: float = Query(0),
+                  end: float = Query(30),
+                  format: str = Query("mp3")):
 
     filename_id = str(uuid.uuid4())
     temp_file = f"{filename_id}.mp3"
