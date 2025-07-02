@@ -1,11 +1,10 @@
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
-from yt_dlp import YoutubeDL
+import requests
 import os
 import uuid
 import subprocess
-import requests
 
 app = FastAPI()
 
@@ -29,47 +28,30 @@ def extract_audio(query: str = Query(...),
                   start: float = Query(0),
                   end: float = Query(30),
                   format: str = Query("mp3")):
+
     try:
-        if "youtube.com" in query or "youtu.be" in query:
-            vid = query.split("v=")[-1].split("&")[0] if "v=" in query else query.split("/")[-1]
-            info = requests.get(f"https://yewtu.be/api/v1/videos/{vid}")
-            if info.status_code != 200:
-                return JSONResponse(content={"error": "Failed to fetch metadata"}, status_code=500)
+        vid = query.split("v=")[1].split("&")[0]
+        invidious_url = f"https://yewtu.be/api/v1/videos/{vid}"
+        response = requests.get(invidious_url)
+        info = response.json()
+        audio_url = next(f["url"] for f in info["adaptiveFormats"] if "audio" in f["mimeType"])
     except Exception as e:
-        return JSONResponse(content={"error": "Video metadata fetch failed", "details": str(e)}, status_code=500)
+        return JSONResponse(
+            content={"error": "Failed to fetch Invidious audio URL", "details": str(e)},
+            status_code=500
+        )
 
     filename_id = str(uuid.uuid4())
-    temp_file = f"{filename_id}_orig.mp3"
-    output_file = f"{filename_id}_trim.{format}"
-    temp_path = os.path.join(OUTPUT_DIR, temp_file)
-    final_path = os.path.join(OUTPUT_DIR, output_file)
-
-    ydl_opts = {
-        "format": "bestaudio/best",
-        "outtmpl": temp_path,
-        "quiet": True,
-        "postprocessors": [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "192",
-        }],
-    }
-
-    try:
-        with YoutubeDL(ydl_opts) as ydl:
-            ydl.download([query])
-    except Exception as e:
-        return JSONResponse(content={"error": str(e)}, status_code=500)
+    input_path = os.path.join(OUTPUT_DIR, f"{filename_id}_input.{format}")
+    output_path = os.path.join(OUTPUT_DIR, f"{filename_id}_trim.{format}")
 
     try:
         subprocess.run([
-            "ffmpeg", "-y", "-i", temp_path,
+            "ffmpeg", "-y", "-i", audio_url,
             "-ss", str(start), "-to", str(end),
-            final_path
+            "-c:a", "libmp3lame", output_path
         ], check=True)
-
-        os.remove(temp_path)
-        return {"file_url": f"/download/{output_file}"}
+        return {"file_url": f"/download/{os.path.basename(output_path)}"}
     except Exception as e:
         return JSONResponse(
             content={"error": "FFmpeg trim failed", "details": str(e)},
