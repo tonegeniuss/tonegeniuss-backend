@@ -30,16 +30,18 @@ def extract_audio(query: str = Query(...),
                   format: str = Query("mp3")):
 
     filename_id = str(uuid.uuid4())
-    temp_file = f"{filename_id}.mp3"
-    output_file = f"{filename_id}.{format}"
-    temp_path = os.path.join(OUTPUT_DIR, temp_file)
-    final_path = os.path.join(OUTPUT_DIR, output_file)
+    # Download original mp3
+    temp_file   = f"{filename_id}_orig.mp3"
+    # Trimmed output file
+    output_file = f"{filename_id}_trim.{format}"
+    temp_path   = os.path.join(OUTPUT_DIR, temp_file)
+    final_path  = os.path.join(OUTPUT_DIR, output_file)
 
     ydl_opts = {
         "format": "bestaudio/best",
         "outtmpl": temp_path,
         "quiet": True,
-        "cookiefile": "cookies.txt",  # ✅ ADDED THIS LINE
+        "cookiefile": "cookies.txt",  # your YouTube auth cookies
         "postprocessors": [{
             "key": "FFmpegExtractAudio",
             "preferredcodec": "mp3",
@@ -47,12 +49,14 @@ def extract_audio(query: str = Query(...),
         }],
     }
 
+    # Step 1: Download audio
     with YoutubeDL(ydl_opts) as ydl:
         try:
             ydl.download([query])
         except Exception as e:
             return JSONResponse(content={"error": str(e)}, status_code=500)
 
+    # Step 2: Trim using ffmpeg
     try:
         subprocess.run([
             "ffmpeg", "-y", "-i", temp_path,
@@ -60,11 +64,15 @@ def extract_audio(query: str = Query(...),
             final_path
         ], check=True)
 
+        # Cleanup original file
         os.remove(temp_path)
         return {"file_url": f"/download/{output_file}"}
 
     except Exception as e:
-        return JSONResponse(content={"error": "FFmpeg trim failed", "details": str(e)}, status_code=500)
+        return JSONResponse(
+            content={"error": "FFmpeg trim failed", "details": str(e)},
+            status_code=500
+        )
 
 @app.get("/download/{filename}")
 def download_file(filename: str):
