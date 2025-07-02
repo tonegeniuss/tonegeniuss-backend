@@ -56,7 +56,7 @@ def extract_audio(query: str = Query(...),
         except Exception as e:
             return JSONResponse(content={"error": str(e)}, status_code=500)
 
-    # Step 2: Trim using ffmpeg
+    # Step 2: Trim using ffmpeg (system binary)
     try:
         subprocess.run([
             "ffmpeg", "-y", "-i", temp_path,
